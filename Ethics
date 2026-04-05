@@ -1,0 +1,176 @@
+"""
+Ethical Machine Learning Example
+Bias & Fairness Awareness
+
+Use case:
+Risk-flagging model used ONLY for proactive support,
+not for denial of care or automated decision-making.
+
+Protected attributes are excluded from training
+and used only for fairness evaluation.
+"""
+
+# -----------------------------
+# 1. Imports
+# -----------------------------
+import pandas as pd
+import numpy as np
+
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, confusion_matrix
+
+
+# -----------------------------
+# 2. Create Example Dataset
+# -----------------------------
+# NOTE:
+# - "sex" is a protected attribute
+# - It is EXCLUDED from training
+# - It is INCLUDED for bias analysis only
+
+data = {
+    "age": [30, 45, 60, 50, 70, 40, 55, 65],
+    "prior_visits": [1, 2, 4, 3, 6, 2, 3, 5],
+    "pain_score": [4, 6, 7, 5, 8, 6, 5, 9],
+    "sex": ["F", "F", "F", "M", "M", "M", "F", "M"],
+    "high_risk": [0, 0, 1, 0, 1, 0, 0, 1]
+}
+
+df = pd.DataFrame(data)
+
+print("Dataset:")
+print(df)
+print("\n")
+
+
+# -----------------------------
+# 3. Split Data
+# -----------------------------
+# Features used for prediction
+X = df[["age", "prior_visits", "pain_score"]]
+
+# Target variable
+y = df["high_risk"]
+
+# Protected attribute for fairness evaluation
+protected = df["sex"]
+
+X_train, X_test, y_train, y_test, p_test = train_test_split(
+    X,
+    y,
+    protected,
+    test_size=0.3,
+    random_state=42
+)
+
+
+# -----------------------------
+# 4. Train Interpretable Model
+# -----------------------------
+model = LogisticRegression()
+model.fit(X_train, y_train)
+
+
+# -----------------------------
+# 5. Make Predictions
+# -----------------------------
+y_pred = model.predict(X_test)
+
+
+# -----------------------------
+# 6. Basic Model Performance
+# -----------------------------
+accuracy = accuracy_score(y_test, y_pred)
+cm = confusion_matrix(y_test, y_pred)
+
+print("Model Performance")
+print("-----------------")
+print(f"Accuracy: {accuracy:.2f}")
+print("Confusion Matrix:")
+print(cm)
+print("\n")
+
+
+# -----------------------------
+# 7. Fairness Evaluation
+# -----------------------------
+results = pd.DataFrame({
+    "actual": y_test.values,
+    "predicted": y_pred,
+    "protected_group": p_test.values
+})
+
+
+def fairness_metrics(df, group_column):
+    """
+    Compute false positive and false negative rates
+    for each protected group.
+    """
+    metrics = {}
+
+    for group in df[group_column].unique():
+        subset = df[df[group_column] == group]
+
+        # Ensure all labels are present
+        cm = confusion_matrix(
+            subset["actual"],
+            subset["predicted"],
+            labels=[0, 1]
+        )
+
+        if cm.size == 4:
+            tn, fp, fn, tp = cm.ravel()
+        else:
+            tn = fp = fn = tp = 0
+
+        fpr = fp / (fp + tn) if (fp + tn) > 0 else 0
+        fnr = fn / (fn + tp) if (fn + tp) > 0 else 0
+
+        metrics[group] = {
+            "false_positive_rate": round(fpr, 3),
+            "false_negative_rate": round(fnr, 3),
+            "samples": len(subset)
+        }
+
+    return metrics
+
+
+bias_results = fairness_metrics(results, "protected_group")
+
+print("Fairness / Bias Evaluation")
+print("---------------------------")
+for group, metrics in bias_results.items():
+    print(f"\nGroup: {group}")
+    for k, v in metrics.items():
+        print(f"  {k}: {v}")
+
+
+# -----------------------------
+# 8. Ethical Interpretation
+# -----------------------------
+print("\nEthical Interpretation")
+print("----------------------")
+print(
+    "This model excludes protected attributes from training.\n"
+    "Bias is evaluated by comparing error rates across groups.\n"
+    "Differences in false-negative rates indicate potential\n"
+    "risk of missed support for certain populations.\n\n"
+    "The model is intended only for risk flagging and\n"
+    "requires human review before any action is taken."
+)
+
+
+# -----------------------------
+# 9. Governance Notes (Documentation)
+# -----------------------------
+print("\nGovernance & Safeguards")
+print("-----------------------")
+print(
+    "- Protected attributes excluded from prediction\n"
+    "- Regular bias audits planned\n"
+    "- Human-in-the-loop decision making\n"
+    "- Model used for support prioritization only\n"
+    "- Interpretability favored over complexity"
+)
+``
